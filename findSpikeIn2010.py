@@ -6,8 +6,9 @@ import json
 
 myDict: dict = dict()
 dateList = []
+
 def main():
-    path: str = r'C:\Users\nitro\Downloads\Data\Extracted'
+    path: str = r'C:/Users/nitro/Downloads/Data/Extracted'
     filesList: list = os.listdir(path)
     with concurrent.futures.ThreadPoolExecutor() as executor:   
         executor.map(getData, filesList)
