@@ -92,6 +92,7 @@ def main():
     
 
 def initializePages(data: dict) -> list:
+    #Converts the jsonDict into a Page List.
     toReturn: list = []
     for pageName in data:
         page: Page = Page(pageName)
@@ -105,6 +106,7 @@ def initializePages(data: dict) -> list:
 
 
 def getMostDeviatingFromMean(data: list) -> list:
+    # Gets a new Page list where every page has only one element that's the furthest from mean
     toReturn: list = []
     for page in data:
         page: Page
