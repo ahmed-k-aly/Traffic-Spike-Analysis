@@ -6,95 +6,64 @@ as an effort to try to understand what caused the
 """
 
 import json
-import heapq
 import math
-from os import system
-
-
-class Page:
-
-    def __init__(self, name: str):
-        # Takes the name of the page and the numRequestsPoint as (Date, Requests) 
-        if type(name) != str:
-            raise TypeError("Name should be a string not a " + str(type(name)))
-        self.name = name
-        self.requestsList: list = []
-        
-    def addRequest(self, numRequestsPoint: tuple):
-        if type(numRequestsPoint) != tuple:
-            raise TypeError("numRequestsPoint should be a tuple not a " + str(type(numRequestsPoint)))
-        if numRequestsPoint[1] < 0:
-            raise ValueError("Number of Requests can only be positive")
-        if len(numRequestsPoint) != 2:
-            raise KeyError("Tuple should be two elements")
-        if type(numRequestsPoint[1]) != int:
-            raise TypeError("numRequestsPoint(1) should be an integer not a " + str(type(numRequestsPoint)))
-        self.requestsList.append(numRequestsPoint)
-    
-    def getMaxRequests(self):
-        if len(self.requestsList < 1):
-            raise IndexError("No Requests in the list")
-        max = (0,0)
-        for requestPoint in self.requestsList:
-            if max[1] < requestPoint[1]:
-                max = requestPoint
-        return max
-
-    def getMean(self) -> float:
-        sigmaRequests: int = 0
-        for requestPoint in self.requestsList:
-            sigmaRequests +=requestPoint[1]
-        return sigmaRequests/len(self.requestsList)
-
-    def getFurthestElementFromMean(self) -> tuple:
-        if len(self.requestsList) < 1:
-            raise IndexError('Requests list is empty')
-        mean: float = self.getMean()
-        max: tuple = self.requestsList[0]
-        for dataPoint in self.requestsList:
-            requestDiffMean: float = dataPoint[1] - mean
-            if requestDiffMean > max[1]:
-                max = dataPoint
-        return max
-    
-
-    def getStdDev(self) -> float:
-        stdDev: int = 0
-        for requestPoint in self.requestsList:
-            numRequests = requestPoint[1]
-            stdDev += (numRequests - self.getMean())**2
-        stdDev /= len(self.requestsList)
-        return math.sqrt(stdDev)
-
-    def __eq__(self, other) -> bool:
-        return self.name == other.name
-
-    def __lt__(self, other) -> bool:
-        return self.requestsList[-1][1] < other.requestsList[-1][1]
-
-    def __gt__(self, other) -> bool:
-        return self.requestsList[0][1] > other.requestsList[0][1]
-
-    def __hash__(self) -> int:
-        return hash(self.name)
-
-    def __str__(self) -> str:
-        return "{}:{}".format(self.name, self.requestsList)
+import numpy as np
+from Page import Page
 
 
 def main():
     json_file = open('wikipedia.json', 'r')
     originalDict: dict = json.load(json_file)
     pageList = initializePages(originalDict)
-    deviatorsList = getMostDeviatingFromMean(pageList)
-    maxPage:Page = getMaxPage(deviatorsList)
-    print(maxPage)
+    getOutlierByStdDev(pageList)
     
+        
+def getOutlierByStdDev(pageList):
+    outliers: Page = getHighestStdDev(pageList, 25)
+    for outlier in outliers:
+        print("Outlier is {} with a stdDev of {}".format(outlier, outlier.getStdDev()))
+
+def getHighestStdDev(pageList: list, n: int = 10) -> list:
+    if n > len(pageList):
+        raise ValueError("n should be smaller than the length of the pagesList")
+    pageList = pageList.copy()
+    toReturn = []
+    for i in range(n):
+        toReturn.append(pageList.pop())
+    for i in range(len(pageList)):
+        page: Page = pageList[i]
+        minInToReturnList = getLeastStdDev(toReturn)
+        if page.getStdDev() > minInToReturnList.getStdDev():
+            toReturn.remove(minInToReturnList)
+            toReturn.append(page)
+    toReturn.sort(reverse=True)
+    return toReturn
+
+def getLeastStdDev(pageList: list):
+    min: Page = pageList[0]
+    for page in pageList:
+        page: Page
+        if page.getStdDev() < min.getStdDev():
+            min = page
+    return min
+
+
+def getOutlierByMostDeviatingFromMean(pageList) -> None:
+    deviatorsList = getMostDeviatingFromMean(pageList)
+    maxPages:list = getMaxDiffMeanPages(deviatorsList, 10)
+    for page in maxPages:
+        page: Page
+        print("Outlier is {} with a mean difference of: {}".format(page, page.requestsList[0][1]- page.getMean()))
 
 def initializePages(data: dict) -> list:
-    #Converts the jsonDict into a Page List.
+    """ 
+    Converts the jsonDict into a list of Page objects.
+    """
     toReturn: list = []
     for pageName in data:
+        page: str = pageName.split(',')[1].lower()
+        if isWeirdPage(page):            
+            continue
         page: Page = Page(pageName)
         for date in data[pageName]:
             requestsPointsDict = data[pageName]
@@ -105,21 +74,122 @@ def initializePages(data: dict) -> list:
     return toReturn
 
 
+def isWeirdPage(page: Page) -> bool:
+    """ 
+    Returns True if the  page is a logistical or an error page.
+    Hardcoded for now
+    """
+    pageType = page.split(':')[0]
+    try:
+        pageName = page.split(':')[1]
+    except:
+        pageName = ""
+    return pageType == "special" or pageType == "especial" or pageType =="speciale" or pageType == 'en' or pageType == 'fr' or pageType == 'de' or pageType == 'it' or pageType == 'speciaal' or pageType == 'spezial' or pageType == r'sp%c3%a9cial' or pageType[0] == '%' or pageName == "bannercontroller"
+
+
 def getMostDeviatingFromMean(data: list) -> list:
-    # Gets a new Page list where every page has only one element that's the furthest from mean
+    """ 
+    Gets a new Page list where every page has only 
+    one element that's the furthest from mean
+    """
     toReturn: list = []
     for page in data:
         page: Page
-        outlierRequest = page.getFurthestElementFromMean()
-        newPage = Page(page.name)
-        newPage.addRequest(outlierRequest)
+        newPage = page.getFurthestElementFromMean()
         toReturn.append(newPage)
     return toReturn
 
 
-def getMaxPage(data: list) -> Page:
-    return max(data)  
+def getMaxDiffMeanPages(data: list, n = 10) -> list:
+    """ 
+    Helper method that returns the top n pages 
+    with most difference from mean
+    """
+    sortedData = mergeSortByFurthestFromMean(data)
+    return sortedData[:n]    
 
 
+def mergeSortByFurthestFromMean(list: list) -> list:
+    # if the list has more than one element, we
+    # half the list
+    # if the list has one element, we merge
+    # with the next list
+    if len(list) == 1:
+        return list    
+    halfLength = len(list) // 2
+    list1 = list[:halfLength]
+    list2 = list[halfLength:]
+    list1 = mergeSortByFurthestFromMean(list1)
+    list2 = mergeSortByFurthestFromMean(list2)
+    return merge(list1, list2)
+        
+def merge(list1: list, list2: list) -> list:
+    newList = []
+    if len(list1) == 1 and len(list2) == 1:
+        page1: Page = list1[0]
+        page2: Page = list2[0]
+        if (page1.requestsList[0][1] -page1.getMean()) > (page2.requestsList[0][1] - page2.getMean()):
+            newList.append(page1)
+            newList.append(page2)
+        else:
+            newList.append(page2)
+            newList.append(page1)
+    else:
+        for page1 in list1:
+            if len(list2) < 1:
+                newList.append(page1)
+                continue
+            page2 = list2[0]
+            if (page1.requestsList[0][1] -page1.getMean()) > (page2.requestsList[0][1] - page2.getMean()):
+                newList.append(page1)
+            else:
+                newList.append(page2)
+                list2.pop(0)
+        while len(list2) > 0:
+            newList.append(list2.pop(0))
+    return newList
+
+
+def mergeSortByStdDev(list: list) -> list:
+    # if the list has more than one element, we
+    # half the list
+    # if the list has one element, we merge
+    # with the next list
+    if len(list) == 1:
+        return list    
+    halfLength = len(list) // 2
+    list1 = list[:halfLength]
+    list2 = list[halfLength:]
+    list1 = mergeSortByStdDev(list1)
+    list2 = mergeSortByStdDev(list2)
+    return mergeStdDev(list1, list2)
+        
+def mergeStdDev(list1: list, list2: list) -> list:
+    newList = []
+    if len(list1) == 1 and len(list2) == 1:
+        page1: Page = list1[0]
+        page2: Page = list2[0]
+        if (page1.getStdDev()) > (page2.getStdDev()):
+            newList.append(page1)
+            newList.append(page2)
+        else:
+            newList.append(page2)
+            newList.append(page1)
+    else:
+        for page1 in list1:
+            if len(list2) < 1:
+                newList.append(page1)
+                continue
+            page2 = list2[0]
+            if (page1.getStdDev()) > (page2.getStdDev()):
+                newList.append(page1)
+            else:
+                newList.append(page2)
+                list2.pop(0)
+        while len(list2) > 0:
+            newList.append(list2.pop(0))
+    return newList
+
+    
 if __name__ == '__main__':
     main()
